@@ -47,6 +47,16 @@ def get_tracking_id(api_user, api_password, app_id):
     return archer_tracking_id
 
 
+def get_mitigation_info(build_id, flaw_id_list, api_user, api_password):
+    payload = {'build_id': build_id, 'flaw_id_list': flaw_id_list}
+    r = requests.get('https://analysiscenter.veracode.com/api/getmitigationinfo.do', params=payload,
+                     auth=(api_user, api_password))
+    if r.status_code != 200:
+        sys.exit('[*] Error getting mitigation_info')
+    print '[*] Received mitigation information for Flaw ID ' + flaw_id_list + ' in Build ID ' + build_id
+    return r.content
+
+
 def main():
     # SET UP ARGUMENTS
     parser = argparse.ArgumentParser(
