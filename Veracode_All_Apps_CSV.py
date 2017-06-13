@@ -149,13 +149,17 @@ def main():
                             if flaw.attrib['remediation_status'] == 'Fixed':
                                 flaw_skip_check = 1
 
-                    # CHECK THE MITIGATION STATUS AND GRAB COMMENT FOR PROPOSED
+                                # CHECK THE MITIGATION STATUS AND GRAB COMMENT FOR PROPOSED
                         if flaw.attrib['mitigation_status'] == 'proposed':
-                            mitigation_xml = get_mitigation_info(latest_build, flaw.attrib['issueid'], args.username, args.password)
+                            mitigation_xml = get_mitigation_info(latest_build, flaw.attrib['issueid'], args.username,
+                                                                 args.password)
                             mitigation_xml = etree.fromstring(mitigation_xml)
-                            recent_proposal_comment = mitigation_xml.findall('{*}issue/{*}mitigation_action')[-1].get('comment')
-                            recent_proposal_date = mitigation_xml.findall('{*}issue/{*}mitigation_action')[-1].get('date')
-                            recent_proposal_reviewer = mitigation_xml.findall('{*}issue/{*}mitigation_action')[-1].get('reviewer')
+                            recent_proposal_comment = mitigation_xml.findall('{*}issue/{*}mitigation_action')[-1].get(
+                                'comment')
+                            recent_proposal_date = mitigation_xml.findall('{*}issue/{*}mitigation_action')[-1].get(
+                                'date')
+                            recent_proposal_reviewer = mitigation_xml.findall('{*}issue/{*}mitigation_action')[-1].get(
+                                'reviewer')
                         else:
                             recent_proposal_comment = 'N/A'
                             recent_proposal_date = 'N/A'
