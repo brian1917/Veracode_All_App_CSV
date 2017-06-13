@@ -53,7 +53,6 @@ def get_mitigation_info(build_id, flaw_id_list, api_user, api_password):
                      auth=(api_user, api_password))
     if r.status_code != 200:
         sys.exit('[*] Error getting mitigation_info')
-    print '[*] Received mitigation information for Flaw ID ' + flaw_id_list + ' in Build ID ' + build_id
     return r.content
 
 
@@ -87,10 +86,9 @@ def main():
     with open('flaws.csv', 'wb') as f:
         wr = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
         headers = ['unique_id', 'tracking_id', 'app_id', 'app_name', 'build_id', 'issueid', 'cweid', 'categoryname',
-                   'categoryid',
-                   'severity',
-                   'exploitLevel', 'module', 'type', 'description', 'date_first_occurrence', 'remediation_status',
-                   'affects_policy_compliance', 'mitigation_status', 'sourcefile', 'line', 'sourcefilepath',
+                   'categoryid', 'severity', 'exploitLevel', 'module', 'type', 'description', 'date_first_occurrence',
+                   'remediation_status', 'affects_policy_compliance', 'mitigation_status', 'mitigation_proposer',
+                   'mitigation_proposal_date', 'mitigation_proposal_comment', 'sourcefile', 'line', 'sourcefilepath',
                    'functionrelativelocation']
         wr.writerow(headers)
 
@@ -114,11 +112,11 @@ def main():
                 latest_build = build_list_xml.findall('{*}build')[-1].get('build_id')
                 results_xml = results_api(args.username, args.password, latest_build)
                 if 'No report available' in results_xml and len(build_list_xml) > 1:
-                    second_latest_build = build_list_xml.findall('{*}build')[-2].get('build_id')
-                    results_xml = results_api(args.username, args.password, second_latest_build)
+                    latest_build = build_list_xml.findall('{*}build')[-2].get('build_id')
+                    results_xml = results_api(args.username, args.password, latest_build)
                 if 'No report available' in results_xml and len(build_list_xml) > 2:
-                    third_latest_build = build_list_xml.findall('{*}build')[-3].get('build_id')
-                    results_xml = results_api(args.username, args.password, third_latest_build)
+                    latest_build = build_list_xml.findall('{*}build')[-3].get('build_id')
+                    results_xml = results_api(args.username, args.password, latest_build)
                 if 'No report available' in results_xml:
                     app_skip_check = 1
 
@@ -151,6 +149,18 @@ def main():
                             if flaw.attrib['remediation_status'] == 'Fixed':
                                 flaw_skip_check = 1
 
+                    # CHECK THE MITIGATION STATUS AND GRAB COMMENT FOR PROPOSED
+                        if flaw.attrib['mitigation_status'] == 'proposed':
+                            mitigation_xml = get_mitigation_info(latest_build, flaw.attrib['issueid'], args.username, args.password)
+                            mitigation_xml = etree.fromstring(mitigation_xml)
+                            recent_proposal_comment = mitigation_xml.findall('{*}issue/{*}mitigation_action')[-1].get('comment')
+                            recent_proposal_date = mitigation_xml.findall('{*}issue/{*}mitigation_action')[-1].get('date')
+                            recent_proposal_reviewer = mitigation_xml.findall('{*}issue/{*}mitigation_action')[-1].get('reviewer')
+                        else:
+                            recent_proposal_comment = 'N/A'
+                            recent_proposal_date = 'N/A'
+                            recent_proposal_reviewer = 'N/A'
+
                         # WRITE DATA TO THE CSV IF WE DON'T SKIP
                         if flaw_skip_check == 0:
                             # ENCODE FLAW DESCRIPTION TO AVOID ERRORS
@@ -164,7 +174,8 @@ def main():
                                    flaw.attrib['severity'], flaw.attrib['exploitLevel'], flaw.attrib['module'],
                                    flaw.attrib['type'], flaw_attrib_text, flaw.attrib['date_first_occurrence'],
                                    flaw.attrib['remediation_status'], flaw.attrib['affects_policy_compliance'],
-                                   flaw.attrib['mitigation_status'], flaw.attrib['sourcefile'], flaw.attrib['line'],
+                                   flaw.attrib['mitigation_status'], recent_proposal_reviewer, recent_proposal_date,
+                                   recent_proposal_comment, flaw.attrib['sourcefile'], flaw.attrib['line'],
                                    flaw.attrib['sourcefilepath'], flaw.attrib['functionrelativelocation'])
                             wr.writerow(row)
 
