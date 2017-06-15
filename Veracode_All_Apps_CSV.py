@@ -47,15 +47,6 @@ def get_tracking_id(api_user, api_password, app_id):
     return archer_tracking_id
 
 
-def get_mitigation_info(build_id, flaw_id_list, api_user, api_password):
-    payload = {'build_id': build_id, 'flaw_id_list': flaw_id_list}
-    r = requests.get('https://analysiscenter.veracode.com/api/getmitigationinfo.do', params=payload,
-                     auth=(api_user, api_password))
-    if r.status_code != 200:
-        sys.exit('[*] Error getting mitigation_info')
-    return r.content
-
-
 def main():
     # SET UP ARGUMENTS
     parser = argparse.ArgumentParser(
@@ -63,17 +54,17 @@ def main():
                     'Use optional parameters to determine to filter what flaws to include.')
     parser.add_argument('-u', '--username', required=True, help='API Username')
     parser.add_argument('-p', '--password', required=True, help='API Password')
-    parser.add_argument('-v', '--policy_violating', required=False, dest='policy_violating', action='store_true',
-                        help='Will only include policy-violating flaws')
-    parser.add_argument('-o', '--open', required=False, dest='open', action='store_true',
-                        help='Will not include fixed flaws')
-    parser.add_argument('-n', '--not_mitigated', required=False, dest='not_mitigated', action='store_true',
-                        help='Will not include flaws with accepted mitigations')
+    parser.add_argument('-v', '--non_policy_violating', required=False, dest='non_policy_violating', action='store_true',
+                        help='Will include non-policy-violating flaws')
+    parser.add_argument('-f', '--fix', required=False, dest='fixed', action='store_true',
+                        help='Will include fixed flaws')
+    parser.add_argument('-m', '--mitigated', required=False, dest='mitigated', action='store_true',
+                        help='Will include flaws with accepted mitigations')
     parser.add_argument('-t', '--exclude_tracking_id', required=False, dest='exclude_tracking_id', action='store_true',
                         help='Will not include Archer Tracking ID custom field (customer-specific')
     args = parser.parse_args()
 
-    # DEFINE SOME VARIABLES
+    # DEFINE INITIAL FLAW COUNT
     total_flaw_count = 0
 
     # DELETE PREVIOUS CSV
@@ -97,8 +88,9 @@ def main():
         app_list_xml = etree.fromstring(app_list_xml)
         app_list = app_list_xml.findall('{*}app')
 
-        # FOR EACH APP, GET THE BUILD LIST
+        # FOR EACH APP, START BY GETTING THE BUILD LIST
         for app in app_list:
+
             app_skip_check = 0
 
             build_list_xml = get_build_list_api(args.username, args.password, app.attrib['app_id'])
@@ -126,7 +118,7 @@ def main():
                 else:
                     tracking_id = get_tracking_id(args.username, args.password, app.attrib['app_id'])
 
-                # SKIP TRACKING IDS SET TO PHASE-2
+                # SKIP TRACKING IDS SET TO PHASE-2 (CUSTOMER SPECIFIC)
                 if tracking_id == 'PHASE-2':
                     app_skip_check = 1
 
@@ -139,27 +131,34 @@ def main():
                     # FOR EACH FLAW, CHECK PARAMETERS TO SEE IF WE SHOULD SKIP
                     for flaw in static_flaws:
                         flaw_skip_check = 0
-                        if args.policy_violating is True:
-                            if flaw.attrib['affects_policy_compliance'] == 'false':
+                        if flaw.attrib['affects_policy_compliance'] == 'false':
+                            if args.non_policy_violating is False:
                                 flaw_skip_check = 1
-                        if args.not_mitigated is True:
-                            if flaw.attrib['mitigation_status'] == 'accepted':
+                        if flaw.attrib['mitigation_status'] == 'accepted':
+                            if args.mitigated is False:
                                 flaw_skip_check = 1
-                        if args.open is True:
-                            if flaw.attrib['remediation_status'] == 'Fixed':
+                        if flaw.attrib['remediation_status'] == 'Fixed':
+                            if args.fixed is False:
                                 flaw_skip_check = 1
 
-                                # CHECK THE MITIGATION STATUS AND GRAB COMMENT FOR PROPOSED
-                        if flaw.attrib['mitigation_status'] == 'proposed':
-                            mitigation_xml = get_mitigation_info(latest_build, flaw.attrib['issueid'], args.username,
-                                                                 args.password)
-                            mitigation_xml = etree.fromstring(mitigation_xml)
-                            recent_proposal_comment = mitigation_xml.findall('{*}issue/{*}mitigation_action')[-1].get(
-                                'comment')
-                            recent_proposal_date = mitigation_xml.findall('{*}issue/{*}mitigation_action')[-1].get(
-                                'date')
-                            recent_proposal_reviewer = mitigation_xml.findall('{*}issue/{*}mitigation_action')[-1].get(
-                                'reviewer')
+                        # CHECK THE MITIGATION STATUS AND GET COMMENT, DATE, AND USER FOR PROPOSED MITIGATIONS
+                        print "Checking mitigation status of Flaw ID " + flaw.attrib['issueid'] + ' in Build ' + latest_build + ' of ' + app.attrib['app_name']
+
+                        if flaw.attrib['remediation_status'] != 'Fixed':
+                            if flaw.attrib['mitigation_status'] == 'proposed':
+                                recent_proposal_comment = results_xml.findall(
+                                    '{*}severity/{*}category/{*}cwe/{*}staticflaws/{*}flaw[@issueid="' + flaw.attrib[
+                                        'issueid'] + '"]/{*}mitigations/{*}mitigation')[-1].get('description')
+                                recent_proposal_date = results_xml.findall(
+                                    '{*}severity/{*}category/{*}cwe/{*}staticflaws/{*}flaw[@issueid="' + flaw.attrib[
+                                        'issueid'] + '"]/{*}mitigations/{*}mitigation')[-1].get('date')
+                                recent_proposal_reviewer = results_xml.findall(
+                                    '{*}severity/{*}category/{*}cwe/{*}staticflaws/{*}flaw[@issueid="' + flaw.attrib[
+                                        'issueid'] + '"]/{*}mitigations/{*}mitigation')[-1].get('user')
+                            else:
+                                recent_proposal_comment = 'N/A'
+                                recent_proposal_date = 'N/A'
+                                recent_proposal_reviewer = 'N/A'
                         else:
                             recent_proposal_comment = 'N/A'
                             recent_proposal_date = 'N/A'
