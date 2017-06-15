@@ -54,7 +54,8 @@ def main():
                     'Use optional parameters to determine to filter what flaws to include.')
     parser.add_argument('-u', '--username', required=True, help='API Username')
     parser.add_argument('-p', '--password', required=True, help='API Password')
-    parser.add_argument('-v', '--non_policy_violating', required=False, dest='non_policy_violating', action='store_true',
+    parser.add_argument('-v', '--non_policy_violating', required=False, dest='non_policy_violating',
+                        action='store_true',
                         help='Will include non-policy-violating flaws')
     parser.add_argument('-f', '--fix', required=False, dest='fixed', action='store_true',
                         help='Will include fixed flaws')
@@ -142,8 +143,6 @@ def main():
                                 flaw_skip_check = 1
 
                         # CHECK THE MITIGATION STATUS AND GET COMMENT, DATE, AND USER FOR PROPOSED MITIGATIONS
-                        print "Checking mitigation status of Flaw ID " + flaw.attrib['issueid'] + ' in Build ' + latest_build + ' of ' + app.attrib['app_name']
-
                         if flaw.attrib['remediation_status'] != 'Fixed':
                             if flaw.attrib['mitigation_status'] == 'proposed':
                                 recent_proposal_comment = results_xml.findall(
