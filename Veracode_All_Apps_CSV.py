@@ -47,6 +47,43 @@ def get_tracking_id(api_user, api_password, app_id):
     return archer_tracking_id
 
 
+def flaw_skip_check_func(flaw, non_policy_violating_flag, mitigated_flag, fixed_flag):
+    check = 0
+    if flaw.attrib['affects_policy_compliance'] == 'false':
+        if non_policy_violating_flag is False:
+            check = 1
+    if flaw.attrib['mitigation_status'] == 'accepted':
+        if mitigated_flag is False:
+            check = 1
+    if flaw.attrib['remediation_status'] == 'Fixed':
+        if fixed_flag is False:
+            check = 1
+    return check
+
+
+def check_mitigations(flaw, results_xml, scan_type):
+    if flaw.attrib['remediation_status'] != 'Fixed':
+        if flaw.attrib['mitigation_status'] == 'proposed':
+            recent_comment = results_xml.findall(
+                '{*}severity/{*}category/{*}cwe/{*}' + scan_type + 'flaws/{*}flaw[@issueid="' + flaw.attrib[
+                    'issueid'] + '"]/{*}mitigations/{*}mitigation')[-1].get('description')
+            recent_reviewer = results_xml.findall(
+                '{*}severity/{*}category/{*}cwe/{*}' + scan_type + 'flaws/{*}flaw[@issueid="' + flaw.attrib[
+                    'issueid'] + '"]/{*}mitigations/{*}mitigation')[-1].get('user')
+            recent_date = results_xml.findall(
+                '{*}severity/{*}category/{*}cwe/{*}' + scan_type + 'flaws/{*}flaw[@issueid="' + flaw.attrib[
+                    'issueid'] + '"]/{*}mitigations/{*}mitigation')[-1].get('date')
+        else:
+            recent_comment = 'N/A'
+            recent_reviewer = 'N/A'
+            recent_date = 'N/A'
+    else:
+        recent_comment = 'N/A'
+        recent_reviewer = 'N/A'
+        recent_date = 'N/A'
+    return recent_comment, recent_reviewer, recent_date
+
+
 def main():
     # SET UP ARGUMENTS
     parser = argparse.ArgumentParser(
@@ -54,7 +91,7 @@ def main():
                     'Use optional parameters to determine to filter what flaws to include.')
     parser.add_argument('-u', '--username', required=True, help='API Username')
     parser.add_argument('-p', '--password', required=True, help='API Password')
-    parser.add_argument('-v', '--non_policy_violating', required=False, dest='non_policy_violating',
+    parser.add_argument('-n', '--non_policy_violating', required=False, dest='non_policy_violating',
                         action='store_true',
                         help='Will include non-policy-violating flaws')
     parser.add_argument('-f', '--fix', required=False, dest='fixed', action='store_true',
@@ -64,6 +101,10 @@ def main():
     parser.add_argument('-t', '--exclude_tracking_id', required=False, dest='exclude_tracking_id', action='store_true',
                         help='Will not include Archer Tracking ID custom field (customer-specific')
     args = parser.parse_args()
+
+    non_policy_violating_flag = args.non_policy_violating
+    mitigated_flag = args.mitigated
+    fixed_flag = args.fixed
 
     # DEFINE INITIAL FLAW COUNT
     total_flaw_count = 0
@@ -99,7 +140,8 @@ def main():
 
             if len(build_list_xml) > 0:
 
-                app_flaw_count = 0
+                static_app_flaw_count = 0
+                dynamic_app_flaw_count = 0
 
                 # GET RESULTS FOR LATEST BUILD
                 latest_build = build_list_xml.findall('{*}build')[-1].get('build_id')
@@ -128,40 +170,17 @@ def main():
 
                     results_xml = etree.fromstring(results_xml)
                     static_flaws = results_xml.findall('{*}severity/{*}category/{*}cwe/{*}staticflaws/{*}flaw')
+                    dynamic_flaws = results_xml.findall('{*}severity/{*}category/{*}cwe/{*}dynamicflaws/{*}flaw')
 
-                    # FOR EACH FLAW, CHECK PARAMETERS TO SEE IF WE SHOULD SKIP
+                    # # # STATIC SECTION # # #
+
+                    # FOR EACH STATIC FLAW, CHECK PARAMETERS TO SEE IF WE SHOULD SKIP
                     for flaw in static_flaws:
-                        flaw_skip_check = 0
-                        if flaw.attrib['affects_policy_compliance'] == 'false':
-                            if args.non_policy_violating is False:
-                                flaw_skip_check = 1
-                        if flaw.attrib['mitigation_status'] == 'accepted':
-                            if args.mitigated is False:
-                                flaw_skip_check = 1
-                        if flaw.attrib['remediation_status'] == 'Fixed':
-                            if args.fixed is False:
-                                flaw_skip_check = 1
-
-                        # CHECK THE MITIGATION STATUS AND GET COMMENT, DATE, AND USER FOR PROPOSED MITIGATIONS
-                        if flaw.attrib['remediation_status'] != 'Fixed':
-                            if flaw.attrib['mitigation_status'] == 'proposed':
-                                recent_proposal_comment = results_xml.findall(
-                                    '{*}severity/{*}category/{*}cwe/{*}staticflaws/{*}flaw[@issueid="' + flaw.attrib[
-                                        'issueid'] + '"]/{*}mitigations/{*}mitigation')[-1].get('description')
-                                recent_proposal_date = results_xml.findall(
-                                    '{*}severity/{*}category/{*}cwe/{*}staticflaws/{*}flaw[@issueid="' + flaw.attrib[
-                                        'issueid'] + '"]/{*}mitigations/{*}mitigation')[-1].get('date')
-                                recent_proposal_reviewer = results_xml.findall(
-                                    '{*}severity/{*}category/{*}cwe/{*}staticflaws/{*}flaw[@issueid="' + flaw.attrib[
-                                        'issueid'] + '"]/{*}mitigations/{*}mitigation')[-1].get('user')
-                            else:
-                                recent_proposal_comment = 'N/A'
-                                recent_proposal_date = 'N/A'
-                                recent_proposal_reviewer = 'N/A'
-                        else:
-                            recent_proposal_comment = 'N/A'
-                            recent_proposal_date = 'N/A'
-                            recent_proposal_reviewer = 'N/A'
+                        flaw_skip_check = flaw_skip_check_func(flaw, non_policy_violating_flag, mitigated_flag, fixed_flag)
+                        recent_proposed_mitigation = check_mitigations(flaw, results_xml, 'static')
+                        recent_proposal_comment = recent_proposed_mitigation[0]
+                        recent_proposal_reviewer = recent_proposed_mitigation[1]
+                        recent_proposal_date = recent_proposed_mitigation[2]
 
                         # WRITE DATA TO THE CSV IF WE DON'T SKIP
                         if flaw_skip_check == 0:
@@ -181,10 +200,44 @@ def main():
                                    flaw.attrib['sourcefilepath'], flaw.attrib['functionrelativelocation'])
                             wr.writerow(row)
 
-                            app_flaw_count += 1
+                            static_app_flaw_count += 1
                             total_flaw_count += 1
 
-                    print '[*] Exported ' + str(app_flaw_count) + ' static flaws from ' + str(
+                    print '[*] Exported ' + str(static_app_flaw_count) + ' static flaws from ' + str(
+                        app.attrib['app_name']) + ' (' + str(app.attrib['app_id']) + '), Build ID ' + str(latest_build)
+
+                    # # # DYNAMIC SECTION # # #
+
+                    # FOR EACH DYNAMIC FLAW, CHECK PARAMETERS TO SEE IF WE SHOULD SKIP
+                    for flaw in dynamic_flaws:
+                        flaw_skip_check = flaw_skip_check_func(flaw, non_policy_violating_flag, mitigated_flag, fixed_flag)
+                        recent_proposed_mitigation = check_mitigations(flaw, results_xml, 'dynamic')
+                        recent_proposal_comment = recent_proposed_mitigation[0]
+                        recent_proposal_reviewer = recent_proposed_mitigation[1]
+                        recent_proposal_date = recent_proposed_mitigation[2]
+
+                        # WRITE DATA TO THE CSV IF WE DON'T SKIP
+                        if flaw_skip_check == 0:
+                            # ENCODE FLAW DESCRIPTION TO AVOID ERRORS
+                            flaw_attrib_text = flaw.attrib['description']
+                            flaw_attrib_text = flaw_attrib_text.encode('utf-8')
+
+                            row = (app.attrib['app_id'] + '-' + flaw.attrib['issueid'],
+                                   tracking_id, app.attrib['app_id'], app.attrib['app_name'], latest_build,
+                                   flaw.attrib['issueid'],
+                                   flaw.attrib['cweid'], flaw.attrib['categoryname'], flaw.attrib['categoryid'],
+                                   flaw.attrib['severity'], 'NA-DAST', 'NA-DAST',
+                                   'NA-DAST', flaw_attrib_text, flaw.attrib['date_first_occurrence'],
+                                   flaw.attrib['remediation_status'], flaw.attrib['affects_policy_compliance'],
+                                   flaw.attrib['mitigation_status'], recent_proposal_reviewer, recent_proposal_date,
+                                   recent_proposal_comment, 'NA-DAST', 'NA-DAST',
+                                   'NA-DAST', 'NA-DAST')
+                            wr.writerow(row)
+
+                            dynamic_app_flaw_count += 1
+                            total_flaw_count += 1
+
+                    print '[*] Exported ' + str(dynamic_app_flaw_count) + ' dynamic flaws from ' + str(
                         app.attrib['app_name']) + ' (' + str(app.attrib['app_id']) + '), Build ID ' + str(latest_build)
 
     print '[*] Exported ' + str(total_flaw_count) + ' total flaws'
