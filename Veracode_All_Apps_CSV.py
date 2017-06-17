@@ -84,7 +84,8 @@ def check_mitigations(flaw, results_xml, scan_type):
     return recent_comment, recent_reviewer, recent_date
 
 
-def build_csv_fields(scan_type, flaw, app_id, tracking_id, app_name, latest_build, flaw_attrib_text, recent_proposal_reviewer,
+def build_csv_fields(scan_type, flaw, app_id, tracking_id, app_name, latest_build, flaw_attrib_text,
+                     recent_proposal_reviewer,
                      recent_proposal_date, recent_proposal_comment):
     field = {}
     field['unique_id'] = app_id + flaw.attrib['issueid']
@@ -150,7 +151,16 @@ def main():
                         help='Will include flaws with accepted mitigations')
     parser.add_argument('-t', '--exclude_tracking_id', required=False, dest='exclude_tracking_id', action='store_true',
                         help='Will not include Archer Tracking ID custom field (customer-specific')
+    parser.add_argument('-s', '--static_only', required=False, dest='static_only', action='store_true',
+                        help='Will export static flaws only')
+    parser.add_argument('-d', '--dynamic_only', required=False, dest='dynamic_only', action='store_true',
+                        help='Will export dynamic flaws only')
+
     args = parser.parse_args()
+
+    # ERROR CHECK PARAMETERS
+    if args.static_only is True and args.dynamic_only is True:
+        sys.exit('[*] You cannot have the static-only and dynamic-only flags set together. Exiting script.')
 
     non_policy_violating_flag = args.non_policy_violating
     mitigated_flag = args.mitigated
@@ -222,55 +232,63 @@ def main():
                     static_flaws = results_xml.findall('{*}severity/{*}category/{*}cwe/{*}staticflaws/{*}flaw')
                     dynamic_flaws = results_xml.findall('{*}severity/{*}category/{*}cwe/{*}dynamicflaws/{*}flaw')
 
-                    # FOR EACH STATIC FLAW, CHECK PARAMETERS TO SEE IF WE SHOULD SKIP
-                    for flaw in static_flaws:
-                        flaw_skip_check = flaw_skip_check_func(flaw, non_policy_violating_flag, mitigated_flag, fixed_flag)
-                        recent_proposed_mitigation = check_mitigations(flaw, results_xml, 'static')
-                        recent_proposal_comment = recent_proposed_mitigation[0]
-                        recent_proposal_reviewer = recent_proposed_mitigation[1]
-                        recent_proposal_date = recent_proposed_mitigation[2]
+                    if args.dynamic_only is not True:
+                        # FOR EACH STATIC FLAW, CHECK PARAMETERS TO SEE IF WE SHOULD SKIP
+                        for flaw in static_flaws:
+                            flaw_skip_check = flaw_skip_check_func(flaw, non_policy_violating_flag, mitigated_flag,
+                                                                   fixed_flag)
+                            recent_proposed_mitigation = check_mitigations(flaw, results_xml, 'static')
+                            recent_proposal_comment = recent_proposed_mitigation[0]
+                            recent_proposal_reviewer = recent_proposed_mitigation[1]
+                            recent_proposal_date = recent_proposed_mitigation[2]
 
-                        # WRITE DATA TO THE CSV IF WE DON'T SKIP
-                        if flaw_skip_check == 0:
-                            # ENCODE FLAW DESCRIPTION TO AVOID ERRORS
-                            flaw_attrib_text = flaw.attrib['description']
-                            flaw_attrib_text = flaw_attrib_text.encode('utf-8')
+                            # WRITE DATA TO THE CSV IF WE DON'T SKIP
+                            if flaw_skip_check == 0:
+                                # ENCODE FLAW DESCRIPTION TO AVOID ERRORS
+                                flaw_attrib_text = flaw.attrib['description']
+                                flaw_attrib_text = flaw_attrib_text.encode('utf-8')
 
-                            row = build_csv_fields('static', flaw, app.attrib['app_id'], tracking_id, app.attrib['app_name'],
-                                                   latest_build, flaw_attrib_text, recent_proposal_reviewer,
-                                                   recent_proposal_date, recent_proposal_comment)
-                            wr.writerow(row)
+                                row = build_csv_fields('static', flaw, app.attrib['app_id'], tracking_id,
+                                                       app.attrib['app_name'],
+                                                       latest_build, flaw_attrib_text, recent_proposal_reviewer,
+                                                       recent_proposal_date, recent_proposal_comment)
+                                wr.writerow(row)
 
-                            static_app_flaw_count += 1
-                            total_flaw_count += 1
+                                static_app_flaw_count += 1
+                                total_flaw_count += 1
 
-                    print '[*] Exported ' + str(static_app_flaw_count) + ' static flaws from ' + str(
-                        app.attrib['app_name']) + ' (' + str(app.attrib['app_id']) + '), Build ID ' + str(latest_build)
+                        print '[*] Exported ' + str(static_app_flaw_count) + ' static flaws from ' + str(
+                            app.attrib['app_name']) + ' (' + str(app.attrib['app_id']) + '), Build ID ' + str(
+                            latest_build)
 
-                    # FOR EACH DYNAMIC FLAW, CHECK PARAMETERS TO SEE IF WE SHOULD SKIP
-                    for flaw in dynamic_flaws:
-                        flaw_skip_check = flaw_skip_check_func(flaw, non_policy_violating_flag, mitigated_flag, fixed_flag)
-                        recent_proposed_mitigation = check_mitigations(flaw, results_xml, 'dynamic')
-                        recent_proposal_comment = recent_proposed_mitigation[0]
-                        recent_proposal_reviewer = recent_proposed_mitigation[1]
-                        recent_proposal_date = recent_proposed_mitigation[2]
+                    if args.static_only is not True:
+                        # FOR EACH DYNAMIC FLAW, CHECK PARAMETERS TO SEE IF WE SHOULD SKIP
+                        for flaw in dynamic_flaws:
+                            flaw_skip_check = flaw_skip_check_func(flaw, non_policy_violating_flag, mitigated_flag,
+                                                                   fixed_flag)
+                            recent_proposed_mitigation = check_mitigations(flaw, results_xml, 'dynamic')
+                            recent_proposal_comment = recent_proposed_mitigation[0]
+                            recent_proposal_reviewer = recent_proposed_mitigation[1]
+                            recent_proposal_date = recent_proposed_mitigation[2]
 
-                        # WRITE DATA TO THE CSV IF WE DON'T SKIP
-                        if flaw_skip_check == 0:
-                            # ENCODE FLAW DESCRIPTION TO AVOID ERRORS
-                            flaw_attrib_text = flaw.attrib['description']
-                            flaw_attrib_text = flaw_attrib_text.encode('utf-8')
+                            # WRITE DATA TO THE CSV IF WE DON'T SKIP
+                            if flaw_skip_check == 0:
+                                # ENCODE FLAW DESCRIPTION TO AVOID ERRORS
+                                flaw_attrib_text = flaw.attrib['description']
+                                flaw_attrib_text = flaw_attrib_text.encode('utf-8')
 
-                            row = build_csv_fields('dynamic', flaw, app.attrib['app_id'], tracking_id, app.attrib['app_name'],
-                                                   latest_build, flaw_attrib_text, recent_proposal_reviewer,
-                                                   recent_proposal_date, recent_proposal_comment)
-                            wr.writerow(row)
+                                row = build_csv_fields('dynamic', flaw, app.attrib['app_id'], tracking_id,
+                                                       app.attrib['app_name'],
+                                                       latest_build, flaw_attrib_text, recent_proposal_reviewer,
+                                                       recent_proposal_date, recent_proposal_comment)
+                                wr.writerow(row)
 
-                            dynamic_app_flaw_count += 1
-                            total_flaw_count += 1
+                                dynamic_app_flaw_count += 1
+                                total_flaw_count += 1
 
-                    print '[*] Exported ' + str(dynamic_app_flaw_count) + ' dynamic flaws from ' + str(
-                        app.attrib['app_name']) + ' (' + str(app.attrib['app_id']) + '), Build ID ' + str(latest_build)
+                        print '[*] Exported ' + str(dynamic_app_flaw_count) + ' dynamic flaws from ' + str(
+                            app.attrib['app_name']) + ' (' + str(app.attrib['app_id']) + '), Build ID ' + str(
+                            latest_build)
 
     print '[*] Exported ' + str(total_flaw_count) + ' total flaws'
 
