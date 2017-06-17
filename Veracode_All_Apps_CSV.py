@@ -154,12 +154,11 @@ def main():
     if args.static_only is True and args.dynamic_only is True:
         sys.exit('[*] You cannot have the static-only and dynamic-only flags set together. Exiting script.')
 
+    # DEFINE SOME VARIABLES
+    total_flaw_count = 0
     non_policy_violating_flag = args.non_policy_violating
     mitigated_flag = args.mitigated
     fixed_flag = args.fixed
-
-    # DEFINE INITIAL FLAW COUNT
-    total_flaw_count = 0
 
     # DELETE PREVIOUS CSV
     try:
@@ -209,7 +208,7 @@ def main():
 
                 # SET THE TRACKING ID
                 if args.exclude_tracking_id is True:
-                    tracking_id = 'NA'
+                    tracking_id = 'N/A'
                 else:
                     tracking_id = get_tracking_id(args.username, args.password, app.attrib['app_id'])
 
