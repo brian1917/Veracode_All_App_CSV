@@ -87,25 +87,17 @@ def check_mitigations(flaw, results_xml, scan_type):
 def build_csv_fields(scan_type, flaw, app_id, tracking_id, app_name, latest_build, flaw_attrib_text,
                      recent_proposal_reviewer,
                      recent_proposal_date, recent_proposal_comment):
-    field = {}
-    field['unique_id'] = app_id + flaw.attrib['issueid']
-    field['tracking_id'] = tracking_id
-    field['app_id'] = app_id
-    field['app_name'] = app_name
-    field['latest_build'] = latest_build
-    field['issueid'] = flaw.attrib['issueid']
-    field['cweid'] = flaw.attrib['cweid']
-    field['categoryname'] = flaw.attrib['categoryname']
-    field['categoryid'] = flaw.attrib['categoryid']
-    field['severity'] = flaw.attrib['severity']
-    field['flaw_attrib_text'] = flaw_attrib_text
-    field['date_first_occurrence'] = flaw.attrib['date_first_occurrence']
-    field['remediation_status'] = flaw.attrib['remediation_status']
-    field['affects_policy_compliance'] = flaw.attrib['affects_policy_compliance']
-    field['mitigation_status'] = flaw.attrib['mitigation_status']
-    field['recent_proposal_reviewer'] = recent_proposal_reviewer
-    field['recent_proposal_date'] = recent_proposal_date
-    field['recent_proposal_comment'] = recent_proposal_comment
+
+    field = {'unique_id': app_id + flaw.attrib['issueid'], 'tracking_id': tracking_id, 'app_id': app_id,
+             'app_name': app_name, 'latest_build': latest_build, 'issueid': flaw.attrib['issueid'],
+             'cweid': flaw.attrib['cweid'], 'categoryname': flaw.attrib['categoryname'],
+             'categoryid': flaw.attrib['categoryid'], 'severity': flaw.attrib['severity'],
+             'flaw_attrib_text': flaw_attrib_text, 'date_first_occurrence': flaw.attrib['date_first_occurrence'],
+             'remediation_status': flaw.attrib['remediation_status'],
+             'affects_policy_compliance': flaw.attrib['affects_policy_compliance'],
+             'mitigation_status': flaw.attrib['mitigation_status'],
+             'recent_proposal_reviewer': recent_proposal_reviewer, 'recent_proposal_date': recent_proposal_date,
+             'recent_proposal_comment': recent_proposal_comment}
 
     if scan_type == 'static':
         field['exploitLevel'] = flaw.attrib['exploitLevel']
