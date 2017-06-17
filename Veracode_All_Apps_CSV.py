@@ -84,6 +84,56 @@ def check_mitigations(flaw, results_xml, scan_type):
     return recent_comment, recent_reviewer, recent_date
 
 
+def build_csv_fields(scan_type, flaw, app_id, tracking_id, app_name, latest_build, flaw_attrib_text, recent_proposal_reviewer,
+                     recent_proposal_date, recent_proposal_comment):
+    field = {}
+    field['unique_id'] = app_id + flaw.attrib['issueid']
+    field['tracking_id'] = tracking_id
+    field['app_id'] = app_id
+    field['app_name'] = app_name
+    field['latest_build'] = latest_build
+    field['issueid'] = flaw.attrib['issueid']
+    field['cweid'] = flaw.attrib['cweid']
+    field['categoryname'] = flaw.attrib['categoryname']
+    field['categoryid'] = flaw.attrib['categoryid']
+    field['severity'] = flaw.attrib['severity']
+    field['flaw_attrib_text'] = flaw_attrib_text
+    field['date_first_occurrence'] = flaw.attrib['date_first_occurrence']
+    field['remediation_status'] = flaw.attrib['remediation_status']
+    field['affects_policy_compliance'] = flaw.attrib['affects_policy_compliance']
+    field['mitigation_status'] = flaw.attrib['mitigation_status']
+    field['recent_proposal_reviewer'] = recent_proposal_reviewer
+    field['recent_proposal_date'] = recent_proposal_date
+    field['recent_proposal_comment'] = recent_proposal_comment
+
+    if scan_type == 'static':
+        field['exploitLevel'] = flaw.attrib['exploitLevel']
+        field['sourcefile'] = flaw.attrib['sourcefile']
+        field['line'] = flaw.attrib['line']
+        field['sourcefilepath'] = flaw.attrib['sourcefilepath']
+        field['functionrelativelocation'] = flaw.attrib['functionrelativelocation']
+        field['module'] = flaw.attrib['module']
+        field['type'] = flaw.attrib['type']
+    else:
+        field['exploitLevel'] = 'NA-DAST'
+        field['sourcefile'] = 'NA-DAST'
+        field['line'] = 'NA-DAST'
+        field['sourcefilepath'] = 'NA-DAST'
+        field['functionrelativelocation'] = 'NA-DAST'
+        field['module'] = 'NA-DAST'
+        field['type'] = 'NA-DAST'
+
+    row = (field['unique_id'], field['tracking_id'], field['app_id'], field['app_name'], field['latest_build'],
+           field['issueid'], field['cweid'], field['categoryname'], field['categoryid'], field['severity'],
+           field['exploitLevel'], field['module'], field['type'], field['flaw_attrib_text'],
+           field['date_first_occurrence'], field['remediation_status'], field['affects_policy_compliance'],
+           field['mitigation_status'], field['recent_proposal_reviewer'], field['recent_proposal_date'],
+           field['recent_proposal_comment'], field['sourcefile'], field['line'], field['sourcefilepath'],
+           field['functionrelativelocation'])
+
+    return row
+
+
 def main():
     # SET UP ARGUMENTS
     parser = argparse.ArgumentParser(
@@ -172,8 +222,6 @@ def main():
                     static_flaws = results_xml.findall('{*}severity/{*}category/{*}cwe/{*}staticflaws/{*}flaw')
                     dynamic_flaws = results_xml.findall('{*}severity/{*}category/{*}cwe/{*}dynamicflaws/{*}flaw')
 
-                    # # # STATIC SECTION # # #
-
                     # FOR EACH STATIC FLAW, CHECK PARAMETERS TO SEE IF WE SHOULD SKIP
                     for flaw in static_flaws:
                         flaw_skip_check = flaw_skip_check_func(flaw, non_policy_violating_flag, mitigated_flag, fixed_flag)
@@ -188,16 +236,9 @@ def main():
                             flaw_attrib_text = flaw.attrib['description']
                             flaw_attrib_text = flaw_attrib_text.encode('utf-8')
 
-                            row = (app.attrib['app_id'] + '-' + flaw.attrib['issueid'],
-                                   tracking_id, app.attrib['app_id'], app.attrib['app_name'], latest_build,
-                                   flaw.attrib['issueid'],
-                                   flaw.attrib['cweid'], flaw.attrib['categoryname'], flaw.attrib['categoryid'],
-                                   flaw.attrib['severity'], flaw.attrib['exploitLevel'], flaw.attrib['module'],
-                                   flaw.attrib['type'], flaw_attrib_text, flaw.attrib['date_first_occurrence'],
-                                   flaw.attrib['remediation_status'], flaw.attrib['affects_policy_compliance'],
-                                   flaw.attrib['mitigation_status'], recent_proposal_reviewer, recent_proposal_date,
-                                   recent_proposal_comment, flaw.attrib['sourcefile'], flaw.attrib['line'],
-                                   flaw.attrib['sourcefilepath'], flaw.attrib['functionrelativelocation'])
+                            row = build_csv_fields('static', flaw, app.attrib['app_id'], tracking_id, app.attrib['app_name'],
+                                                   latest_build, flaw_attrib_text, recent_proposal_reviewer,
+                                                   recent_proposal_date, recent_proposal_comment)
                             wr.writerow(row)
 
                             static_app_flaw_count += 1
@@ -205,8 +246,6 @@ def main():
 
                     print '[*] Exported ' + str(static_app_flaw_count) + ' static flaws from ' + str(
                         app.attrib['app_name']) + ' (' + str(app.attrib['app_id']) + '), Build ID ' + str(latest_build)
-
-                    # # # DYNAMIC SECTION # # #
 
                     # FOR EACH DYNAMIC FLAW, CHECK PARAMETERS TO SEE IF WE SHOULD SKIP
                     for flaw in dynamic_flaws:
@@ -222,16 +261,9 @@ def main():
                             flaw_attrib_text = flaw.attrib['description']
                             flaw_attrib_text = flaw_attrib_text.encode('utf-8')
 
-                            row = (app.attrib['app_id'] + '-' + flaw.attrib['issueid'],
-                                   tracking_id, app.attrib['app_id'], app.attrib['app_name'], latest_build,
-                                   flaw.attrib['issueid'],
-                                   flaw.attrib['cweid'], flaw.attrib['categoryname'], flaw.attrib['categoryid'],
-                                   flaw.attrib['severity'], 'NA-DAST', 'NA-DAST',
-                                   'NA-DAST', flaw_attrib_text, flaw.attrib['date_first_occurrence'],
-                                   flaw.attrib['remediation_status'], flaw.attrib['affects_policy_compliance'],
-                                   flaw.attrib['mitigation_status'], recent_proposal_reviewer, recent_proposal_date,
-                                   recent_proposal_comment, 'NA-DAST', 'NA-DAST',
-                                   'NA-DAST', 'NA-DAST')
+                            row = build_csv_fields('dynamic', flaw, app.attrib['app_id'], tracking_id, app.attrib['app_name'],
+                                                   latest_build, flaw_attrib_text, recent_proposal_reviewer,
+                                                   recent_proposal_date, recent_proposal_comment)
                             wr.writerow(row)
 
                             dynamic_app_flaw_count += 1
