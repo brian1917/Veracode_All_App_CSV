@@ -147,6 +147,7 @@ def main():
                         help='Will export static flaws only')
     parser.add_argument('-d', '--dynamic_only', required=False, dest='dynamic_only', action='store_true',
                         help='Will export dynamic flaws only')
+    parser.add_argument('-a', '--app_list', required=False, help='Text file to limit app list')
 
     args = parser.parse_args()
 
@@ -183,6 +184,11 @@ def main():
 
         # FOR EACH APP, START BY GETTING THE BUILD LIST
         for app in app_list:
+            if args.app_list is not None:
+                f = open(args.app_list, "rb")
+                allowed_apps = f.read().split('\n')
+                if app.attrib['app_id'] not in allowed_apps:
+                    continue
 
             app_skip_check = 0
 
