@@ -23,11 +23,15 @@ def get_app_list_api(api_user, api_password):
 
 
 def get_build_list_api(api_user, api_password, app_id):
+    file = app_id + "_buildlist.xml"
     payload = {'app_id': app_id}
     r = requests.get('https://analysiscenter.veracode.com/api/5.0/getbuildlist.do', params=payload,
                      auth=(api_user, api_password))
     if r.status_code != 200:
         sys.exit('[*] Error getting build list')
+    f = open(file, 'w')
+    f.write(r.content)
+    f.close()
     return r.content
 
 
@@ -181,6 +185,19 @@ def main():
         app_list_xml = get_app_list_api(args.username, args.password)
         app_list_xml = etree.fromstring(app_list_xml)
         app_list = app_list_xml.findall('{*}app')
+
+        # CREATE APP LIST TEXT FILE
+        f = open('api_app_list.txt', 'w')
+        for app in app_list[:-1]:
+            f.write('%s\n' % app.attrib['app_id'])
+        f.write('%s' % app_list[-1].get('app_id'))
+
+        # FOR EACH APP IN THE TEXT FILE, GET THE BUILD LIST XML
+        f = open('api_app_list.txt', "r")
+        app_list = f.read().split('\n')
+        for app in app_list:
+            get_build_list_api(args.username, args.password, app)
+        sys.exit('Done for now')
 
         # FOR EACH APP, START BY GETTING THE BUILD LIST
         for app in app_list:
