@@ -23,7 +23,7 @@ def get_app_list_api(api_user, api_password):
 
 
 def get_build_list_api(api_user, api_password, app_id):
-    file = app_id + "_buildlist.xml"
+    file = 'build_xml_files/' + app_id + "_buildlist.xml"
     payload = {'app_id': app_id}
     r = requests.get('https://analysiscenter.veracode.com/api/5.0/getbuildlist.do', params=payload,
                      auth=(api_user, api_password))
