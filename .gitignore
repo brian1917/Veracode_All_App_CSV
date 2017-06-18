@@ -1,4 +1,4 @@
-apps.txt
+*.txt
 flaws.csv
 test.py
 *.pyc
