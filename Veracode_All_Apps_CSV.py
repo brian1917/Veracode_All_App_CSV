@@ -7,6 +7,35 @@ import multiprocessing as mp
 from functools import partial
 from lxml import etree
 import time
+import shutil
+
+
+def cleanup(clean_type):
+
+    try:
+        shutil.rmtree('detailed_results')
+    except OSError:
+        pass
+    try:
+        shutil.rmtree('build_xml_files')
+    except OSError:
+        pass
+    try:
+        os.remove('api_app_list.txt')
+    except OSError:
+        pass
+
+    if clean_type == 'start':
+        try:
+            os.remove('flaws.csv')
+        except OSError:
+            pass
+        if not os.path.exists('detailed_results'):
+            os.makedirs('detailed_results')
+        if not os.path.exists('build_xml_files'):
+            os.makedirs('build_xml_files')
+
+    return()
 
 
 def results_api(api_user, api_password, build_id):
@@ -202,10 +231,9 @@ def main():
     provided_app_list = args.app_list
 
     # DELETE PREVIOUS CSV
-    try:
-        os.remove('flaws.csv')
-    except OSError:
-        pass
+    cleanup('start')
+
+    time.sleep(10)
 
     # OPEN CSV FILE AND WRITE HEADERS
     with open('flaws.csv', 'wb') as f:
@@ -338,6 +366,8 @@ def main():
                         print '[*] Exported ' + str(dynamic_app_flaw_count) + ' dynamic flaws from ' + app_name + ' (' + app + '), Build ID ' + str(latest_build)
 
     print '[*] Exported ' + str(total_flaw_count) + ' total flaws'
+
+    cleanup('end')
 
     print('--- %s seconds ---' % (time.time() - start_time))
 
