@@ -11,7 +11,6 @@ import shutil
 
 
 def cleanup(clean_type):
-
     try:
         shutil.rmtree('detailed_results')
     except OSError:
@@ -35,7 +34,7 @@ def cleanup(clean_type):
         if not os.path.exists('build_xml_files'):
             os.makedirs('build_xml_files')
 
-    return()
+    return ()
 
 
 def results_api(api_user, api_password, build_id):
@@ -124,7 +123,6 @@ def check_mitigations(flaw, results_xml, scan_type):
 def build_csv_fields(scan_type, flaw, app_id, tracking_id, app_name, latest_build, flaw_attrib_text,
                      recent_proposal_reviewer,
                      recent_proposal_date, recent_proposal_comment):
-
     field = {'unique_id': app_id + flaw.attrib['issueid'], 'tracking_id': tracking_id, 'app_id': app_id,
              'app_name': app_name, 'latest_build': latest_build, 'issueid': flaw.attrib['issueid'],
              'cweid': flaw.attrib['cweid'], 'categoryname': flaw.attrib['categoryname'],
@@ -165,7 +163,6 @@ def build_csv_fields(scan_type, flaw, app_id, tracking_id, app_name, latest_buil
 
 
 def create_results_xml(api_user, api_password, provided_app_list, app_id):
-
     # CHECK FOR PROVIDED LIST IN PARAMETERS
     if provided_app_list is not None:
         f = open(provided_app_list, "rb")
@@ -335,7 +332,8 @@ def main():
                             static_app_flaw_count += 1
                             total_flaw_count += 1
 
-                    print '[*] Exported ' + str(static_app_flaw_count) + ' static flaws from ' + app_name + ' (' + str(app) + '), Build ID ' + str(
+                    print '[*] Exported ' + str(static_app_flaw_count) + ' static flaws from ' + app_name + ' (' + str(
+                        app) + '), Build ID ' + str(
                         latest_build)
 
                     if args.static_only is not True:
@@ -363,7 +361,9 @@ def main():
                                 dynamic_app_flaw_count += 1
                                 total_flaw_count += 1
 
-                        print '[*] Exported ' + str(dynamic_app_flaw_count) + ' dynamic flaws from ' + app_name + ' (' + app + '), Build ID ' + str(latest_build)
+                        print '[*] Exported ' + str(
+                            dynamic_app_flaw_count) + ' dynamic flaws from ' + app_name + ' (' + app + '), Build ID ' + str(
+                            latest_build)
 
     print '[*] Exported ' + str(total_flaw_count) + ' total flaws'
 
