@@ -1,4 +1,5 @@
 *.txt
-flaws.csv
-test.py
+*.xml
 *.pyc
+*.csv
+test.py
