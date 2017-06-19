@@ -3,7 +3,10 @@ import sys
 import requests
 import argparse
 import os
+import multiprocessing as mp
+from functools import partial
 from lxml import etree
+import time
 
 
 def results_api(api_user, api_password, build_id):
@@ -23,16 +26,17 @@ def get_app_list_api(api_user, api_password):
 
 
 def get_build_list_api(api_user, api_password, app_id):
-    file = 'build_xml_files/' + app_id + "_buildlist.xml"
+    file_name = 'build_xml_files' + os.path.sep + app_id + "_buildlist.xml"
     payload = {'app_id': app_id}
     r = requests.get('https://analysiscenter.veracode.com/api/5.0/getbuildlist.do', params=payload,
                      auth=(api_user, api_password))
     if r.status_code != 200:
         sys.exit('[*] Error getting build list')
-    f = open(file, 'w')
+    f = open(file_name, 'w')
     f.write(r.content)
     f.close()
-    return r.content
+    print '[*] Created ' + file_name
+    return ()
 
 
 def get_app_info_api(api_user, api_password, app_id):
@@ -131,7 +135,38 @@ def build_csv_fields(scan_type, flaw, app_id, tracking_id, app_name, latest_buil
     return row
 
 
+def create_results_xml(api_user, api_password, provided_app_list, app_id):
+
+    # CHECK FOR PROVIDED LIST IN PARAMETERS
+    if provided_app_list is not None:
+        f = open(provided_app_list, "rb")
+        allowed_apps = f.read().split('\n')
+        if app_id not in allowed_apps:
+            return
+    else:
+        build_list_xml_file = 'build_xml_files' + os.path.sep + app_id + "_buildlist.xml"
+        build_list_xml = etree.parse(build_list_xml_file)
+
+        # GET RESULTS FOR LATEST BUILD
+        latest_build = build_list_xml.findall('{*}build')[-1].get('build_id')
+        results_xml = results_api(api_user, api_password, latest_build)
+        if 'No report available' in results_xml:
+            latest_build = build_list_xml.findall('{*}build')[-2].get('build_id')
+            results_xml = results_api(api_user, api_password, latest_build)
+        if 'No report available' in results_xml:
+            latest_build = build_list_xml.findall('{*}build')[-3].get('build_id')
+            results_xml = results_api(api_user, api_password, latest_build)
+
+        file_name = 'detailed_results' + os.path.sep + app_id + '.xml'
+        f = open(file_name, 'w')
+        f.write(results_xml)
+        f.close()
+        print '[*] Created ' + file_name
+
+
 def main():
+    start_time = time.time()
+
     # SET UP ARGUMENTS
     parser = argparse.ArgumentParser(
         description='This script creates a CSV for flaws in the most recent build of all applications in an account. '
@@ -164,6 +199,7 @@ def main():
     non_policy_violating_flag = args.non_policy_violating
     mitigated_flag = args.mitigated
     fixed_flag = args.fixed
+    provided_app_list = args.app_list
 
     # DELETE PREVIOUS CSV
     try:
@@ -191,89 +227,88 @@ def main():
         for app in app_list[:-1]:
             f.write('%s\n' % app.attrib['app_id'])
         f.write('%s' % app_list[-1].get('app_id'))
+        f.close()
 
         # FOR EACH APP IN THE TEXT FILE, GET THE BUILD LIST XML
         f = open('api_app_list.txt', "r")
         app_list = f.read().split('\n')
-        for app in app_list:
-            get_build_list_api(args.username, args.password, app)
-        sys.exit('Done for now')
+        f.close()
+
+        pool = mp.Pool(8)
+        func = partial(get_build_list_api, args.username, args.password)
+        pool.map(func, app_list)
+        pool.close()
+        pool.join()
+
+        # GET DETAILED XML FOR EACH APP
+        pool = mp.Pool(8)
+        func = partial(create_results_xml, args.username, args.password, provided_app_list)
+        pool.map(func, app_list)
+        pool.close()
+        pool.join()
 
         # FOR EACH APP, START BY GETTING THE BUILD LIST
         for app in app_list:
-            if args.app_list is not None:
-                f = open(args.app_list, "rb")
-                allowed_apps = f.read().split('\n')
-                if app.attrib['app_id'] not in allowed_apps:
-                    continue
-
             app_skip_check = 0
 
-            build_list_xml = get_build_list_api(args.username, args.password, app.attrib['app_id'])
-            build_list_xml = etree.fromstring(build_list_xml)
+            file_name = 'detailed_results' + os.path.sep + app + '.xml'
+            results_xml = etree.parse(file_name)
 
-            if len(build_list_xml) > 0:
+            with open(file_name, 'r') as xml_file:
+                xml_string = xml_file.read().replace('\n', '')
 
+            if '<error>' in xml_string:
+                app_skip_check = 1
+                print '[*] Skipping ' + app
+
+            # SET THE TRACKING ID
+            if args.exclude_tracking_id is True:
+                tracking_id = 'N/A'
+            else:
+                tracking_id = get_tracking_id(args.username, args.password, app)
+
+            # SKIP TRACKING IDS SET TO PHASE-2 (CUSTOMER SPECIFIC)
+            if tracking_id == 'PHASE-2':
+                app_skip_check = 1
+
+            # CONTINUE IF NOT SKIPPING APP
+            if app_skip_check == 0:
+                app_name = results_xml.getroot().attrib['app_name']
+                latest_build = results_xml.getroot().attrib['build_id']
                 static_app_flaw_count = 0
                 dynamic_app_flaw_count = 0
 
-                # GET RESULTS FOR LATEST BUILD
-                latest_build = build_list_xml.findall('{*}build')[-1].get('build_id')
-                results_xml = results_api(args.username, args.password, latest_build)
-                if 'No report available' in results_xml and len(build_list_xml) > 1:
-                    latest_build = build_list_xml.findall('{*}build')[-2].get('build_id')
-                    results_xml = results_api(args.username, args.password, latest_build)
-                if 'No report available' in results_xml and len(build_list_xml) > 2:
-                    latest_build = build_list_xml.findall('{*}build')[-3].get('build_id')
-                    results_xml = results_api(args.username, args.password, latest_build)
-                if 'No report available' in results_xml:
-                    app_skip_check = 1
+                static_flaws = results_xml.findall('{*}severity/{*}category/{*}cwe/{*}staticflaws/{*}flaw')
+                dynamic_flaws = results_xml.findall('{*}severity/{*}category/{*}cwe/{*}dynamicflaws/{*}flaw')
 
-                # SET THE TRACKING ID
-                if args.exclude_tracking_id is True:
-                    tracking_id = 'N/A'
-                else:
-                    tracking_id = get_tracking_id(args.username, args.password, app.attrib['app_id'])
+                if args.dynamic_only is not True:
+                    # FOR EACH STATIC FLAW, CHECK PARAMETERS TO SEE IF WE SHOULD SKIP
+                    for flaw in static_flaws:
+                        flaw_skip_check = flaw_skip_check_func(flaw, non_policy_violating_flag, mitigated_flag,
+                                                               fixed_flag)
+                        recent_proposed_mitigation = check_mitigations(flaw, results_xml, 'static')
+                        recent_proposal_comment = recent_proposed_mitigation[0]
+                        recent_proposal_reviewer = recent_proposed_mitigation[1]
+                        recent_proposal_date = recent_proposed_mitigation[2]
 
-                # SKIP TRACKING IDS SET TO PHASE-2 (CUSTOMER SPECIFIC)
-                if tracking_id == 'PHASE-2':
-                    app_skip_check = 1
+                        # WRITE DATA TO THE CSV IF WE DON'T SKIP
+                        if flaw_skip_check == 0:
+                            # ENCODE FLAW DESCRIPTION TO AVOID ERRORS
+                            flaw_attrib_text = flaw.attrib['description']
+                            flaw_attrib_text = flaw_attrib_text.encode('utf-8')
 
-                # CONTINUE IF NOT SKIPPING APP
-                if app_skip_check == 0:
+                            row = build_csv_fields('static', flaw, app, tracking_id,
+                                                   app_name,
+                                                   latest_build, flaw_attrib_text, recent_proposal_reviewer,
+                                                   recent_proposal_date, recent_proposal_comment)
 
-                    results_xml = etree.fromstring(results_xml)
-                    static_flaws = results_xml.findall('{*}severity/{*}category/{*}cwe/{*}staticflaws/{*}flaw')
-                    dynamic_flaws = results_xml.findall('{*}severity/{*}category/{*}cwe/{*}dynamicflaws/{*}flaw')
+                            wr.writerow(row)
 
-                    if args.dynamic_only is not True:
-                        # FOR EACH STATIC FLAW, CHECK PARAMETERS TO SEE IF WE SHOULD SKIP
-                        for flaw in static_flaws:
-                            flaw_skip_check = flaw_skip_check_func(flaw, non_policy_violating_flag, mitigated_flag,
-                                                                   fixed_flag)
-                            recent_proposed_mitigation = check_mitigations(flaw, results_xml, 'static')
-                            recent_proposal_comment = recent_proposed_mitigation[0]
-                            recent_proposal_reviewer = recent_proposed_mitigation[1]
-                            recent_proposal_date = recent_proposed_mitigation[2]
+                            static_app_flaw_count += 1
+                            total_flaw_count += 1
 
-                            # WRITE DATA TO THE CSV IF WE DON'T SKIP
-                            if flaw_skip_check == 0:
-                                # ENCODE FLAW DESCRIPTION TO AVOID ERRORS
-                                flaw_attrib_text = flaw.attrib['description']
-                                flaw_attrib_text = flaw_attrib_text.encode('utf-8')
-
-                                row = build_csv_fields('static', flaw, app.attrib['app_id'], tracking_id,
-                                                       app.attrib['app_name'],
-                                                       latest_build, flaw_attrib_text, recent_proposal_reviewer,
-                                                       recent_proposal_date, recent_proposal_comment)
-                                wr.writerow(row)
-
-                                static_app_flaw_count += 1
-                                total_flaw_count += 1
-
-                        print '[*] Exported ' + str(static_app_flaw_count) + ' static flaws from ' + str(
-                            app.attrib['app_name']) + ' (' + str(app.attrib['app_id']) + '), Build ID ' + str(
-                            latest_build)
+                    print '[*] Exported ' + str(static_app_flaw_count) + ' static flaws from ' + app_name + ' (' + str(app) + '), Build ID ' + str(
+                        latest_build)
 
                     if args.static_only is not True:
                         # FOR EACH DYNAMIC FLAW, CHECK PARAMETERS TO SEE IF WE SHOULD SKIP
@@ -291,8 +326,8 @@ def main():
                                 flaw_attrib_text = flaw.attrib['description']
                                 flaw_attrib_text = flaw_attrib_text.encode('utf-8')
 
-                                row = build_csv_fields('dynamic', flaw, app.attrib['app_id'], tracking_id,
-                                                       app.attrib['app_name'],
+                                row = build_csv_fields('dynamic', flaw, app, tracking_id,
+                                                       app_name,
                                                        latest_build, flaw_attrib_text, recent_proposal_reviewer,
                                                        recent_proposal_date, recent_proposal_comment)
                                 wr.writerow(row)
@@ -300,11 +335,11 @@ def main():
                                 dynamic_app_flaw_count += 1
                                 total_flaw_count += 1
 
-                        print '[*] Exported ' + str(dynamic_app_flaw_count) + ' dynamic flaws from ' + str(
-                            app.attrib['app_name']) + ' (' + str(app.attrib['app_id']) + '), Build ID ' + str(
-                            latest_build)
+                        print '[*] Exported ' + str(dynamic_app_flaw_count) + ' dynamic flaws from ' + app_name + ' (' + app + '), Build ID ' + str(latest_build)
 
     print '[*] Exported ' + str(total_flaw_count) + ' total flaws'
+
+    print('--- %s seconds ---' % (time.time() - start_time))
 
 
 if __name__ == '__main__':
