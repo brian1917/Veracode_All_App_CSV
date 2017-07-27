@@ -120,44 +120,27 @@ def check_mitigations(flaw, results_xml, scan_type):
     return recent_comment, recent_reviewer, recent_date
 
 
-def build_csv_fields(scan_type, flaw, app_id, tracking_id, app_name, latest_build, flaw_attrib_text,
-                     recent_proposal_reviewer,
-                     recent_proposal_date, recent_proposal_comment):
+def build_csv_fields(scan_type, flaw, app_id, tracking_id, app_name, latest_build):
     field = {'unique_id': app_id + flaw.attrib['issueid'], 'tracking_id': tracking_id, 'app_id': app_id,
              'app_name': app_name, 'latest_build': latest_build, 'issueid': flaw.attrib['issueid'],
              'cweid': flaw.attrib['cweid'], 'categoryname': flaw.attrib['categoryname'],
              'categoryid': flaw.attrib['categoryid'], 'severity': flaw.attrib['severity'],
-             'flaw_attrib_text': flaw_attrib_text, 'date_first_occurrence': flaw.attrib['date_first_occurrence'],
+             'date_first_occurrence': flaw.attrib['date_first_occurrence'],
              'remediation_status': flaw.attrib['remediation_status'],
              'affects_policy_compliance': flaw.attrib['affects_policy_compliance'],
-             'mitigation_status': flaw.attrib['mitigation_status'],
-             'recent_proposal_reviewer': recent_proposal_reviewer, 'recent_proposal_date': recent_proposal_date,
-             'recent_proposal_comment': recent_proposal_comment}
+             'mitigation_status': flaw.attrib['mitigation_status']}
 
     if scan_type == 'static':
         field['exploitLevel'] = flaw.attrib['exploitLevel']
-        field['sourcefile'] = flaw.attrib['sourcefile']
-        field['line'] = flaw.attrib['line']
-        field['sourcefilepath'] = flaw.attrib['sourcefilepath']
-        field['functionrelativelocation'] = flaw.attrib['functionrelativelocation']
-        field['module'] = flaw.attrib['module']
-        field['type'] = flaw.attrib['type']
+
     else:
         field['exploitLevel'] = 'NA-DAST'
-        field['sourcefile'] = 'NA-DAST'
-        field['line'] = 'NA-DAST'
-        field['sourcefilepath'] = 'NA-DAST'
-        field['functionrelativelocation'] = 'NA-DAST'
-        field['module'] = 'NA-DAST'
-        field['type'] = 'NA-DAST'
 
     row = (field['unique_id'], field['tracking_id'], field['app_id'], field['app_name'], field['latest_build'],
            field['issueid'], field['cweid'], field['categoryname'], field['categoryid'], field['severity'],
-           field['exploitLevel'], field['module'], field['type'], field['flaw_attrib_text'],
+           field['exploitLevel'],
            field['date_first_occurrence'], field['remediation_status'], field['affects_policy_compliance'],
-           field['mitigation_status'], field['recent_proposal_reviewer'], field['recent_proposal_date'],
-           field['recent_proposal_comment'], field['sourcefile'], field['line'], field['sourcefilepath'],
-           field['functionrelativelocation'])
+           field['mitigation_status'])
 
     return row
 
@@ -170,18 +153,26 @@ def create_results_xml(api_user, api_password, provided_app_list, app_id):
         if app_id not in allowed_apps:
             return
     else:
-        build_list_xml_file = 'build_xml_files' + os.path.sep + app_id + "_buildlist.xml"
+        build_list_xml_file = 'build_xml_files' + os.path.sep + app_id + '_buildlist.xml'
         build_list_xml = etree.parse(build_list_xml_file)
 
-        # GET RESULTS FOR LATEST BUILD
-        latest_build = build_list_xml.findall('{*}build')[-1].get('build_id')
-        results_xml = results_api(api_user, api_password, latest_build)
-        if 'No report available' in results_xml:
-            latest_build = build_list_xml.findall('{*}build')[-2].get('build_id')
+        number_of_builds = len(build_list_xml.findall('{*}build'))
+
+        if number_of_builds > 0:
+            latest_build = build_list_xml.findall('{*}build')[-1].get('build_id')
             results_xml = results_api(api_user, api_password, latest_build)
-        if 'No report available' in results_xml:
-            latest_build = build_list_xml.findall('{*}build')[-3].get('build_id')
-            results_xml = results_api(api_user, api_password, latest_build)
+            if 'No report available' in results_xml and number_of_builds > 1:
+                latest_build = build_list_xml.findall('{*}build')[-2].get('build_id')
+                results_xml = results_api(api_user, api_password, latest_build)
+            if 'No report available' in results_xml and number_of_builds > 2:
+                latest_build = build_list_xml.findall('{*}build')[-3].get('build_id')
+                results_xml = results_api(api_user, api_password, latest_build)
+        else:
+            results_xml = ''  # NEED TO SET IT TO SOMETHING FOR LOGIC CHECK
+
+        if 'No report available' in results_xml or number_of_builds == 0:
+            print '[*] App ID ' + app_id + ' has no valid builds. Building dummy XML'
+            results_xml = '<?xml version="1.0" encoding="UTF-8"?><error>No builds valid. Generating dummy XML for script</error>'
 
         file_name = 'detailed_results' + os.path.sep + app_id + '.xml'
         f = open(file_name, 'w')
@@ -230,16 +221,12 @@ def main():
     # DELETE PREVIOUS CSV
     cleanup('start')
 
-    time.sleep(10)
-
     # OPEN CSV FILE AND WRITE HEADERS
     with open('flaws.csv', 'wb') as f:
         wr = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
         headers = ['unique_id', 'tracking_id', 'app_id', 'app_name', 'build_id', 'issueid', 'cweid', 'categoryname',
-                   'categoryid', 'severity', 'exploitLevel', 'module', 'type', 'description', 'date_first_occurrence',
-                   'remediation_status', 'affects_policy_compliance', 'mitigation_status', 'mitigation_proposer',
-                   'mitigation_proposal_date', 'mitigation_proposal_comment', 'sourcefile', 'line', 'sourcefilepath',
-                   'functionrelativelocation']
+                   'categoryid', 'severity', 'exploitLevel', 'date_first_occurrence',
+                   'remediation_status', 'affects_policy_compliance', 'mitigation_status']
         wr.writerow(headers)
 
         # GET THE APP LIST
@@ -260,15 +247,15 @@ def main():
         f.close()
 
         pool = mp.Pool(8)
-        func = partial(get_build_list_api, args.username, args.password)
-        pool.map(func, app_list)
+        func_build_list = partial(get_build_list_api, args.username, args.password)
+        pool.map(func_build_list, app_list)
         pool.close()
         pool.join()
 
         # GET DETAILED XML FOR EACH APP
         pool = mp.Pool(8)
-        func = partial(create_results_xml, args.username, args.password, provided_app_list)
-        pool.map(func, app_list)
+        func_detailed_report = partial(create_results_xml, args.username, args.password, provided_app_list)
+        pool.map(func_detailed_report, app_list)
         pool.close()
         pool.join()
 
@@ -284,7 +271,7 @@ def main():
 
             if '<error>' in xml_string:
                 app_skip_check = 1
-                print '[*] Skipping ' + app
+                print '[*] Skipping App ID ' + app + ' because it has no results'
 
             # SET THE TRACKING ID
             if args.exclude_tracking_id is True:
@@ -311,21 +298,20 @@ def main():
                     for flaw in static_flaws:
                         flaw_skip_check = flaw_skip_check_func(flaw, non_policy_violating_flag, mitigated_flag,
                                                                fixed_flag)
-                        recent_proposed_mitigation = check_mitigations(flaw, results_xml, 'static')
-                        recent_proposal_comment = recent_proposed_mitigation[0]
-                        recent_proposal_reviewer = recent_proposed_mitigation[1]
-                        recent_proposal_date = recent_proposed_mitigation[2]
+                        # recent_proposed_mitigation = check_mitigations(flaw, results_xml, 'static')
+                        # recent_proposal_comment = recent_proposed_mitigation[0]
+                        # recent_proposal_reviewer = recent_proposed_mitigation[1]
+                        # recent_proposal_date = recent_proposed_mitigation[2]
 
                         # WRITE DATA TO THE CSV IF WE DON'T SKIP
                         if flaw_skip_check == 0:
                             # ENCODE FLAW DESCRIPTION TO AVOID ERRORS
-                            flaw_attrib_text = flaw.attrib['description']
-                            flaw_attrib_text = flaw_attrib_text.encode('utf-8')
+                            # flaw_attrib_text = flaw.attrib['description']
+                            # flaw_attrib_text = flaw_attrib_text.encode('utf-8')
 
                             row = build_csv_fields('static', flaw, app, tracking_id,
                                                    app_name,
-                                                   latest_build, flaw_attrib_text, recent_proposal_reviewer,
-                                                   recent_proposal_date, recent_proposal_comment)
+                                                   latest_build)
 
                             wr.writerow(row)
 
@@ -341,21 +327,20 @@ def main():
                         for flaw in dynamic_flaws:
                             flaw_skip_check = flaw_skip_check_func(flaw, non_policy_violating_flag, mitigated_flag,
                                                                    fixed_flag)
-                            recent_proposed_mitigation = check_mitigations(flaw, results_xml, 'dynamic')
-                            recent_proposal_comment = recent_proposed_mitigation[0]
-                            recent_proposal_reviewer = recent_proposed_mitigation[1]
-                            recent_proposal_date = recent_proposed_mitigation[2]
+                            # recent_proposed_mitigation = check_mitigations(flaw, results_xml, 'dynamic')
+                            # recent_proposal_comment = recent_proposed_mitigation[0]
+                            # recent_proposal_reviewer = recent_proposed_mitigation[1]
+                            # recent_proposal_date = recent_proposed_mitigation[2]
 
                             # WRITE DATA TO THE CSV IF WE DON'T SKIP
                             if flaw_skip_check == 0:
                                 # ENCODE FLAW DESCRIPTION TO AVOID ERRORS
-                                flaw_attrib_text = flaw.attrib['description']
-                                flaw_attrib_text = flaw_attrib_text.encode('utf-8')
+                                # flaw_attrib_text = flaw.attrib['description']
+                                # flaw_attrib_text = flaw_attrib_text.encode('utf-8')
 
                                 row = build_csv_fields('dynamic', flaw, app, tracking_id,
                                                        app_name,
-                                                       latest_build, flaw_attrib_text, recent_proposal_reviewer,
-                                                       recent_proposal_date, recent_proposal_comment)
+                                                       latest_build)
                                 wr.writerow(row)
 
                                 dynamic_app_flaw_count += 1
