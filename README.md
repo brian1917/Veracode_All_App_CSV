@@ -4,7 +4,11 @@
 Script provides a single CSV for all flaws in a Veracode account. Default settings only export policy-violating, non-mitigated, and non-fixed flaws. Parameters can override defaults.
 
 ## Required Libraries 
+<<<<<<< HEAD
 sys, requests, argparse, os, multiprocessing, functools, lxml, import time, import shutil
+=======
+csv, sys, requests, argparse, os, lxml
+>>>>>>> 5457cc67c8aa50dd70be803de72a07c3eee7dbf0
 
 ## Parameters
 1. **-u, --username**: Veracode user name with reviewer permissions. Required.
