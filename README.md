@@ -12,10 +12,9 @@ csv, sys, requests, argparse, os, multiprocessing, functools, lxml, shutil, logg
 3. **-n, --non_policy_violating**: Will include non-policy violating flaws. Optional.
 4. **-f, --fix**: Will include fixed flaws. Optional
 5. **-m, --mitigated**: Will include mitigated flaws. Optional.
-6. **-t, --exclude_tracking_id**: Will exclude the tracking ID column (can be customer specific). Optional.
-7. **-s, --static_only**: Will only export static flaws. Optional.
-8. **-d, --dynamic_only**: Will include dynamic only flaws. Optional.
-9. **-v, --verbose**: Verbose debug logging. Optional.
+6. **-s, --static_only**: Will only export static flaws. Optional.
+7. **-d, --dynamic_only**: Will include dynamic only flaws. Optional.
+8. **-v, --verbose**: Verbose debug logging. Optional.
 
 ## Output
 Creates a CSV file with all output: **flaws.csv**.
