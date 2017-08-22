@@ -18,5 +18,5 @@ csv, sys, requests, argparse, os, multiprocessing, functools, lxml, shutil, logg
 9. **-v, --verbose**: Verbose debug logging. Optional.
 
 ## Output
-Creates a CSV file - **flaws.csv**.
-Creates a log file - **veracode_all_apps_csv.log**. (No output to terminal - all to log)
+Creates a CSV file with all output: **flaws.csv**.
+Creates a log file: **veracode_all_apps_csv.log**. (No output to terminal - all to log)
