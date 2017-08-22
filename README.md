@@ -19,3 +19,6 @@ csv, sys, requests, argparse, os, multiprocessing, functools, lxml, shutil, logg
 ## Output
 Creates a CSV file with all output: **flaws.csv**.
 Creates a log file: **veracode_all_apps_csv.log**. (No output to terminal - all to log)
+
+## Other Notes
+The script will create two temporary directories: **build_xml_files** and **detailed_results**. These will be deleted at the end of the script. If the script exits in error, the temporary directories will be deleted at the start of the next run.
