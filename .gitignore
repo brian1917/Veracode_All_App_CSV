@@ -1,4 +1,5 @@
-apps.txt
-flaws.csv
-test.py
+*.txt
+*.xml
 *.pyc
+*.csv
+*.log
