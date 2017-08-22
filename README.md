@@ -1,14 +1,10 @@
 # Veracode All App CSV
 
 ## Description
-Script provides a single CSV for all flaws in a Veracode account. Default settings only export policy-violating, non-mitigated, and non-fixed flaws. Parameters can override defaults.
+Script provides a single CSV for all flaws in a Veracode account. Default settings only export policy-violating, non-mitigated, and non-fixed flaws for most recent static and dynamic scans. Parameters can override defaults.
 
 ## Required Libraries 
-<<<<<<< HEAD
-sys, requests, argparse, os, multiprocessing, functools, lxml, import time, import shutil
-=======
-csv, sys, requests, argparse, os, lxml
->>>>>>> 5457cc67c8aa50dd70be803de72a07c3eee7dbf0
+csv, sys, requests, argparse, os, multiprocessing, functools, lxml, shutil, logging
 
 ## Parameters
 1. **-u, --username**: Veracode user name with reviewer permissions. Required.
@@ -19,4 +15,8 @@ csv, sys, requests, argparse, os, lxml
 6. **-t, --exclude_tracking_id**: Will exclude the tracking ID column (can be customer specific). Optional.
 7. **-s, --static_only**: Will only export static flaws. Optional.
 8. **-d, --dynamic_only**: Will include dynamic only flaws. Optional.
-9. **-a, --app_list**: Text file to limit app list (app ID on separate lines). Optional.
+9. **-v, --verbose**: Verbose debug logging. Optional.
+
+## Output
+Creates a CSV file - **flaws.csv**.
+Creates a log file - **veracode_all_apps_csv.log**. (No output to terminal - all to log)
