@@ -2,4 +2,4 @@
 *.xml
 *.pyc
 *.csv
-playaround.py
+*.log
