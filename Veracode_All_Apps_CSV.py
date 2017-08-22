@@ -76,11 +76,11 @@ def get_app_info_api(api_user, api_password, app_id):
     return r.content
 
 
-def get_tracking_id(api_user, api_password, app_id):
+def get_custom_field_1(api_user, api_password, app_id):
     app_info_xml = get_app_info_api(api_user, api_password, app_id)
     app_info_xml = etree.fromstring(app_info_xml)
-    archer_tracking_id = app_info_xml.findall('{*}application/{*}customfield')[0].get('value')
-    return archer_tracking_id
+    custom_field_1 = app_info_xml.findall('{*}application/{*}customfield')[0].get('value')
+    return custom_field_1
 
 
 def flaw_skip_check_func(flaw, non_policy_violating_flag, mitigated_flag, fixed_flag):
@@ -99,7 +99,7 @@ def flaw_skip_check_func(flaw, non_policy_violating_flag, mitigated_flag, fixed_
 
 def check_mitigations(flaw, results_xml, scan_type):
     if flaw.attrib['remediation_status'] != 'Fixed':
-        if flaw.attrib['mitigation_status'] == 'proposed':
+        if flaw.attrib['mitigation_status'] in ['proposed', 'accepted', 'rejected']:
             recent_comment = results_xml.findall(
                 '{*}severity/{*}category/{*}cwe/{*}' + scan_type + 'flaws/{*}flaw[@issueid="' + flaw.attrib[
                     'issueid'] + '"]/{*}mitigations/{*}mitigation')[-1].get('description')
@@ -110,20 +110,20 @@ def check_mitigations(flaw, results_xml, scan_type):
                 '{*}severity/{*}category/{*}cwe/{*}' + scan_type + 'flaws/{*}flaw[@issueid="' + flaw.attrib[
                     'issueid'] + '"]/{*}mitigations/{*}mitigation')[-1].get('date')
         else:
-            recent_comment = 'N/A'
-            recent_reviewer = 'N/A'
-            recent_date = 'N/A'
+            recent_comment = 'NA'
+            recent_reviewer = 'NA'
+            recent_date = 'NA'
     else:
-        recent_comment = 'N/A'
-        recent_reviewer = 'N/A'
-        recent_date = 'N/A'
+        recent_comment = 'NA'
+        recent_reviewer = 'NA'
+        recent_date = 'NA'
     return recent_comment, recent_reviewer, recent_date
 
 
-def build_csv_fields(scan_type, flaw, app_id, tracking_id, app_name, latest_build, recent_proposal_comment,
+def build_csv_fields(scan_type, flaw, app_id, custom_field_1, app_name, latest_build, recent_proposal_comment,
                      recent_proposal_reviewer, recent_proposal_date):
     field = {'unique_id': app_id + flaw.attrib['issueid'],
-             'tracking_id': tracking_id,
+             'custom_field_1': custom_field_1,
              'app_id': app_id,
              'app_name': app_name,
              'latest_build': latest_build,
@@ -157,7 +157,7 @@ def build_csv_fields(scan_type, flaw, app_id, tracking_id, app_name, latest_buil
         field['url'] = flaw.attrib['url']
 
     row = (field['unique_id'],
-           field['tracking_id'],
+           field['custom_field_1'],
            field['app_id'],
            field['app_name'].encode('utf-8'),
            field['latest_build'],
@@ -204,7 +204,7 @@ def create_results_xml(api_user, api_password, app_id):
 
     if 'No report available' in results_xml or number_of_builds == 0:
         logging.info('App ID ' + app_id + ' has no valid builds; building dummy XML')
-        results_xml = '<?xml version="1.0" encoding="UTF-8"?><error>No builds valid. Generating dummy XML for script</error>'
+        results_xml = '<?xml version="1.0" encoding="UTF-8"?><error>No builds valid. Dummy XML for script</error>'
 
     file_name = 'detailed_results' + os.path.sep + app_id + '.xml'
     f = open(file_name, 'w')
@@ -230,8 +230,6 @@ def main():
                         help='Will include fixed flaws')
     parser.add_argument('-m', '--mitigated', required=False, dest='mitigated', action='store_true',
                         help='Will include flaws with accepted mitigations')
-    parser.add_argument('-t', '--exclude_tracking_id', required=False, dest='exclude_tracking_id', action='store_true',
-                        help='Will not include Archer Tracking ID custom field (customer-specific')
     parser.add_argument('-s', '--static_only', required=False, dest='static_only', action='store_true',
                         help='Will export static flaws only')
     parser.add_argument('-d', '--dynamic_only', required=False, dest='dynamic_only', action='store_true',
@@ -267,7 +265,7 @@ def main():
     # OPEN CSV FILE AND WRITE HEADERS
     with open('flaws.csv', 'wb') as f:
         wr = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
-        headers = ['unique_id', 'tracking_id', 'app_id', 'app_name', 'latest_build', 'issueid', 'cweid',
+        headers = ['unique_id', 'custom_field_1', 'app_id', 'app_name', 'latest_build', 'issueid', 'cweid',
                    'categoryname', 'categoryid', 'severity', 'exploitLevel', 'date_first_occurrence', 'description',
                    'remediation_status', 'affects_policy_compliance', 'mitigation_status', 'recent_proposal_comment',
                    'recent_proposal_reviewer', 'recent_proposal_date', 'sourcefilepath', 'sourcefile', 'line', 'url']
@@ -317,17 +315,9 @@ def main():
                 app_skip_check = 1
                 logging.info('Skipping App ID ' + app + ' because it has no results')
 
-            # SET THE TRACKING ID
-            if args.exclude_tracking_id is True:
-                tracking_id = 'N/A'
-            else:
-                tracking_id = get_tracking_id(args.username, args.password, app)
+            # GET CUSTOM FIELD 1 TO BRING INTO REPORTS FOR CUSTOMER-SPECIFIC NEEDS
+            custom_field_1 = get_custom_field_1(args.username, args.password, app)
 
-            # SKIP TRACKING IDS SET TO PHASE-2 (CUSTOMER SPECIFIC)
-            if tracking_id == 'PHASE-2':
-                app_skip_check = 1
-
-            # CONTINUE IF NOT SKIPPING APP
             if app_skip_check == 0:
                 app_name = results_xml.getroot().attrib['app_name']
                 latest_build = results_xml.getroot().attrib['build_id']
@@ -349,7 +339,7 @@ def main():
                         # WRITE DATA TO THE CSV IF WE DON'T SKIP
                         if flaw_skip_check == 0:
 
-                            row = build_csv_fields('static', flaw, app, tracking_id, app_name, latest_build,
+                            row = build_csv_fields('static', flaw, app, custom_field_1, app_name, latest_build,
                                                    recent_proposed_mitigation[0], recent_proposed_mitigation[1],
                                                    recent_proposed_mitigation[2])
 
@@ -373,7 +363,7 @@ def main():
                             # WRITE DATA TO THE CSV IF WE DON'T SKIP
                             if flaw_skip_check == 0:
 
-                                row = build_csv_fields('dynamic', flaw, app, tracking_id, app_name, latest_build,
+                                row = build_csv_fields('dynamic', flaw, app, custom_field_1, app_name, latest_build,
                                                        recent_proposed_mitigation[0], recent_proposed_mitigation[1],
                                                        recent_proposed_mitigation[2])
                                 wr.writerow(row)
@@ -384,7 +374,7 @@ def main():
                         logging.info('Exported ' + str(dynamic_app_flaw_count) + ' dynamic flaws from ' +
                                      app_name + ' (' + app + '), Build ID ' + str(latest_build))
 
-    logging.info('Exported ' + str(total_flaw_count) + ' total flaws')
+    logging.info('COMPLETE: Exported ' + str(total_flaw_count) + ' total flaws')
 
     cleanup('end')
 
